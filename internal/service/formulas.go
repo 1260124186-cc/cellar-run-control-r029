@@ -5,9 +5,13 @@ import (
 	"time"
 
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/policyz"
 )
 
-func (s *Service) CreateFormula(input CreateFormulaInput) (domain.Formula, error) {
+func (s *Service) CreateFormula(operatorID string, input CreateFormulaInput) (domain.Formula, error) {
+	if err := s.Authorize(operatorID, policyz.PermFormulaPlan, "POST /v1/formulas"); err != nil {
+		return domain.Formula{}, err
+	}
 	now := s.clock.Now()
 	formula := domain.Formula{
 		Name:                  input.Name,
@@ -50,9 +54,13 @@ func (s *Service) CreateFormula(input CreateFormulaInput) (domain.Formula, error
 }
 
 func (s *Service) SetFormulaSteps(
+	operatorID string,
 	id string,
 	input SetFormulaStepsInput,
 ) (domain.Formula, error) {
+	if err := s.Authorize(operatorID, policyz.PermFormulaManage, "PUT /v1/formulas/{id}/steps"); err != nil {
+		return domain.Formula{}, err
+	}
 	var updated domain.Formula
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
@@ -76,7 +84,10 @@ func (s *Service) SetFormulaSteps(
 	return updated, nil
 }
 
-func (s *Service) ApproveFormula(id string, input VersionInput) (domain.Formula, error) {
+func (s *Service) ApproveFormula(operatorID, id string, input VersionInput) (domain.Formula, error) {
+	if err := s.Authorize(operatorID, policyz.PermFormulaManage, "POST /v1/formulas/{id}/approve"); err != nil {
+		return domain.Formula{}, err
+	}
 	var updated domain.Formula
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
@@ -99,7 +110,10 @@ func (s *Service) ApproveFormula(id string, input VersionInput) (domain.Formula,
 	return updated, nil
 }
 
-func (s *Service) RetireFormula(id string, input VersionInput) (domain.Formula, error) {
+func (s *Service) RetireFormula(operatorID, id string, input VersionInput) (domain.Formula, error) {
+	if err := s.Authorize(operatorID, policyz.PermFormulaManage, "POST /v1/formulas/{id}/retire"); err != nil {
+		return domain.Formula{}, err
+	}
 	var updated domain.Formula
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
@@ -129,7 +143,10 @@ func (s *Service) RetireFormula(id string, input VersionInput) (domain.Formula, 
 	return updated, nil
 }
 
-func (s *Service) GetFormula(id string) (domain.Formula, error) {
+func (s *Service) GetFormula(operatorID, id string) (domain.Formula, error) {
+	if err := s.Authorize(operatorID, policyz.PermFormulaRead, "GET /v1/formulas/{id}"); err != nil {
+		return domain.Formula{}, err
+	}
 	var found domain.Formula
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
@@ -145,7 +162,10 @@ func (s *Service) GetFormula(id string) (domain.Formula, error) {
 	return found, nil
 }
 
-func (s *Service) ListFormulas() ([]domain.Formula, error) {
+func (s *Service) ListFormulas(operatorID string) ([]domain.Formula, error) {
+	if err := s.Authorize(operatorID, policyz.PermFormulaRead, "GET /v1/formulas"); err != nil {
+		return nil, err
+	}
 	var formulas []domain.Formula
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		formulas = make([]domain.Formula, 0, len(snapshot.Formulas))

@@ -11,8 +11,9 @@ import (
 )
 
 type client struct {
-	baseURL string
-	http    *http.Client
+	baseURL  string
+	http     *http.Client
+	operator string
 }
 
 type response struct {
@@ -27,6 +28,15 @@ func newClient(baseURL string) *client {
 			Timeout: 5 * time.Second,
 		},
 	}
+}
+
+// as returns a copy of the client that sends X-Operator-ID on every call, so
+// the workflow checks exercise the same identity-to-permission path as real
+// integration clients.
+func (c *client) as(operator string) *client {
+	copy := *c
+	copy.operator = operator
+	return &copy
 }
 
 func (c *client) call(
@@ -49,6 +59,9 @@ func (c *client) call(
 	}
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
+	}
+	if c.operator != "" {
+		request.Header.Set("X-Operator-ID", c.operator)
 	}
 	if expectedVersion != nil {
 		request.Header.Set("X-Expected-Version", fmt.Sprintf("%d", *expectedVersion))

@@ -4,9 +4,13 @@ import (
 	"sort"
 
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/policyz"
 )
 
-func (s *Service) CreateRun(input CreateRunInput) (domain.FermentationRun, error) {
+func (s *Service) CreateRun(operatorID string, input CreateRunInput) (domain.FermentationRun, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunPlan, "POST /v1/runs"); err != nil {
+		return domain.FermentationRun{}, err
+	}
 	now := s.clock.Now()
 	code := domain.NormalizeRunCode(input.Code)
 	if code == "" {
@@ -60,9 +64,13 @@ func (s *Service) CreateRun(input CreateRunInput) (domain.FermentationRun, error
 }
 
 func (s *Service) ReserveRun(
+	operatorID string,
 	id string,
 	input ReserveRunInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunControl, "POST /v1/runs/{id}/reserve"); err != nil {
+		return domain.FermentationRun{}, domain.Vessel{}, err
+	}
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
@@ -100,9 +108,13 @@ func (s *Service) ReserveRun(
 }
 
 func (s *Service) StartRun(
+	operatorID string,
 	id string,
 	input VersionInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunControl, "POST /v1/runs/{id}/start"); err != nil {
+		return domain.FermentationRun{}, domain.Vessel{}, err
+	}
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
@@ -139,9 +151,13 @@ func (s *Service) StartRun(
 }
 
 func (s *Service) AbortRun(
+	operatorID string,
 	id string,
 	input VersionInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunAbort, "POST /v1/runs/{id}/abort"); err != nil {
+		return domain.FermentationRun{}, domain.Vessel{}, err
+	}
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
@@ -181,7 +197,10 @@ func (s *Service) AbortRun(
 	return updatedRun, updatedVessel, nil
 }
 
-func (s *Service) GetRun(id string) (domain.FermentationRun, error) {
+func (s *Service) GetRun(operatorID, id string) (domain.FermentationRun, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunRead, "GET /v1/runs/{id}"); err != nil {
+		return domain.FermentationRun{}, err
+	}
 	var found domain.FermentationRun
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
@@ -197,7 +216,10 @@ func (s *Service) GetRun(id string) (domain.FermentationRun, error) {
 	return found, nil
 }
 
-func (s *Service) ListRuns() ([]domain.FermentationRun, error) {
+func (s *Service) ListRuns(operatorID string) ([]domain.FermentationRun, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunRead, "GET /v1/runs"); err != nil {
+		return nil, err
+	}
 	var runs []domain.FermentationRun
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		runs = make([]domain.FermentationRun, 0, len(snapshot.Runs))

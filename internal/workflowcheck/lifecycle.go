@@ -2,11 +2,12 @@ package workflowcheck
 
 import "github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 
-func vesselRunLifecycle(api *client) error {
-	formula, err := ensureApprovedFormula(api, "Lifecycle Formula")
+func vesselRunLifecycle(team actors) error {
+	formula, err := ensureApprovedFormula(team, "Lifecycle Formula")
 	if err != nil {
 		return err
 	}
+	api := team.operator
 	vesselResponse, err := api.call("POST", "/v1/vessels", map[string]any{
 		"code":            "VSL-101",
 		"capacity_liters": 240.0,
@@ -45,6 +46,17 @@ func vesselRunLifecycle(api *client) error {
 	}
 	var second runView
 	if err := secondResponse.decode(&second); err != nil {
+		return err
+	}
+
+	// The planner cannot reserve a vessel: container control is operator work.
+	plannerReserve, err := team.planner.call("POST", "/v1/runs/"+first.ID+"/reserve",
+		map[string]any{"vessel_id": vessel.ID}, ptrInt64(1))
+	if err != nil {
+		return err
+	}
+	if err := requireCode(plannerReserve, 403, string(domain.CodeForbidden),
+		"planner reserves vessel"); err != nil {
 		return err
 	}
 
@@ -98,6 +110,17 @@ func vesselRunLifecycle(api *client) error {
 		return errInvalidWorkflow("run did not retain its reserved vessel")
 	}
 
+	// An observer records measurements but cannot drive vessel/run control.
+	observerStart, err := team.observer.call("POST", "/v1/runs/"+second.ID+"/start",
+		nil, ptrInt64(1))
+	if err != nil {
+		return err
+	}
+	if err := requireCode(observerStart, 403, string(domain.CodeForbidden),
+		"observer starts run"); err != nil {
+		return err
+	}
+
 	readResponse, err := api.call("GET", "/v1/runs/"+first.ID, nil, nil)
 	if err != nil {
 		return err
@@ -110,6 +133,22 @@ func vesselRunLifecycle(api *client) error {
 	}
 	if err := requireRunState(first, domain.RunFermenting); err != nil {
 		return err
+	}
+
+	// The denied attempts above must leave the second run untouched at version
+	// 1 and in its planned state.
+	secondRead, err := api.call("GET", "/v1/runs/"+second.ID, nil, nil)
+	if err != nil {
+		return err
+	}
+	if err := requireStatus(secondRead, 200, "read untouched run"); err != nil {
+		return err
+	}
+	if err := secondRead.decode(&second); err != nil {
+		return err
+	}
+	if second.State != domain.RunPlanned || second.Version != 1 {
+		return errInvalidWorkflow("denied control request changed run state")
 	}
 	return nil
 }

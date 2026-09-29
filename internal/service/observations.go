@@ -1,11 +1,17 @@
 package service
 
 import "github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
+import "github.com/1260124186-cc/solo-0016-cellar-run-control/internal/policyz"
 
 func (s *Service) AppendObservation(
+	operatorID string,
 	id string,
 	input ObservationInput,
 ) (domain.FermentationRun, error) {
+	if err := s.Authorize(operatorID, policyz.PermObservationWrite,
+		"POST /v1/runs/{id}/observations"); err != nil {
+		return domain.FermentationRun{}, err
+	}
 	var updated domain.FermentationRun
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
@@ -36,9 +42,14 @@ func (s *Service) AppendObservation(
 }
 
 func (s *Service) BeginConditioning(
+	operatorID string,
 	id string,
 	input VersionInput,
 ) (domain.FermentationRun, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunComplete,
+		"POST /v1/runs/{id}/conditioning"); err != nil {
+		return domain.FermentationRun{}, err
+	}
 	var updated domain.FermentationRun
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
@@ -62,9 +73,13 @@ func (s *Service) BeginConditioning(
 }
 
 func (s *Service) CompleteRun(
+	operatorID string,
 	id string,
 	input VersionInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermRunComplete, "POST /v1/runs/{id}/complete"); err != nil {
+		return domain.FermentationRun{}, domain.Vessel{}, err
+	}
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {

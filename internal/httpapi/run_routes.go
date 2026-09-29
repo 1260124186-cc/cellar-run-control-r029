@@ -28,11 +28,15 @@ type observationRequest struct {
 
 func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	mux.HandleFunc("POST /v1/runs", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[createRunRequest](response, request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, err := app.CreateRun(service.CreateRunInput{
+		run, err := app.CreateRun(operatorID, service.CreateRunInput{
 			Code:           body.Code,
 			FormulaID:      body.FormulaID,
 			PlannedVolumeL: body.PlannedVolumeL,
@@ -45,8 +49,8 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 		writeJSON(response, http.StatusCreated, run)
 	})
 
-	mux.HandleFunc("GET /v1/runs", func(response http.ResponseWriter, _ *http.Request) {
-		runs, err := app.ListRuns()
+	mux.HandleFunc("GET /v1/runs", func(response http.ResponseWriter, request *http.Request) {
+		runs, err := app.ListRuns(operatorFromRequest(request))
 		if err != nil {
 			writeDomainError(response, err)
 			return
@@ -55,7 +59,7 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("GET /v1/runs/{id}", func(response http.ResponseWriter, request *http.Request) {
-		run, err := app.GetRun(request.PathValue("id"))
+		run, err := app.GetRun(operatorFromRequest(request), request.PathValue("id"))
 		if err != nil {
 			writeDomainError(response, err)
 			return
@@ -64,6 +68,10 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/reserve", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[reserveRunRequest](response, request)
 		if !handleDecode(response, err) {
 			return
@@ -72,7 +80,7 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.ReserveRun(request.PathValue("id"), service.ReserveRunInput{
+		run, vessel, err := app.ReserveRun(operatorID, request.PathValue("id"), service.ReserveRunInput{
 			ExpectedVersion: expected,
 			VesselID:        body.VesselID,
 		})
@@ -84,11 +92,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/start", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.StartRun(request.PathValue("id"),
+		run, vessel, err := app.StartRun(operatorID, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -98,11 +110,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/observations", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[observationRequest](response, request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, err := app.AppendObservation(request.PathValue("id"), service.ObservationInput{
+		run, err := app.AppendObservation(operatorID, request.PathValue("id"), service.ObservationInput{
 			Sequence:     body.Sequence,
 			Gravity:      body.Gravity,
 			TemperatureC: body.TemperatureC,
@@ -117,11 +133,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/conditioning", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, err := app.BeginConditioning(request.PathValue("id"),
+		run, err := app.BeginConditioning(operatorID, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -131,11 +151,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/complete", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.CompleteRun(request.PathValue("id"),
+		run, vessel, err := app.CompleteRun(operatorID, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -145,11 +169,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/abort", func(response http.ResponseWriter, request *http.Request) {
+		operatorID, ok := requireOperator(response, request)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.AbortRun(request.PathValue("id"),
+		run, vessel, err := app.AbortRun(operatorID, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)

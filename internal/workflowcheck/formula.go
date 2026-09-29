@@ -6,7 +6,8 @@ import (
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 )
 
-func formulaApproval(api *client) error {
+func formulaApproval(team actors) error {
+	api := team.planner
 	createdResponse, err := api.call("POST", "/v1/formulas",
 		createFormulaPayload("Current Pale"), nil)
 	if err != nil {
@@ -57,6 +58,18 @@ func formulaApproval(api *client) error {
 		return err
 	}
 
+	// A cellar operator plans runs and vessels but cannot author or approve
+	// formulas: the planning permission is planner-only.
+	crossRole, err := team.operator.call("POST", "/v1/formulas",
+		createFormulaPayload("Operator Brew"), nil)
+	if err != nil {
+		return err
+	}
+	if err := requireCode(crossRole, 403, string(domain.CodeForbidden),
+		"operator creates formula"); err != nil {
+		return err
+	}
+
 	approvedResponse, err := api.call("POST", "/v1/formulas/"+formula.ID+"/approve", nil, ptrInt64(2))
 	if err != nil {
 		return err
@@ -94,10 +107,34 @@ func formulaApproval(api *client) error {
 		"approve formula twice"); err != nil {
 		return err
 	}
+
+	// The observer role is read-only on formulas and cannot approve one.
+	observerApprove, err := team.observer.call("POST",
+		"/v1/formulas/"+formula.ID+"/approve", nil, ptrInt64(3))
+	if err != nil {
+		return err
+	}
+	if err := requireCode(observerApprove, 403, string(domain.CodeForbidden),
+		"observer approves formula"); err != nil {
+		return err
+	}
+
+	// The rejection must not have created a new formula or altered state: the
+	// operator's forbidden attempt used an unused name, so confirm the planner
+	// can still create that name after the denial.
+	retry, err := api.call("POST", "/v1/formulas",
+		createFormulaPayload("Operator Brew"), nil)
+	if err != nil {
+		return err
+	}
+	if err := requireStatus(retry, 201, "planner creates formula after denial"); err != nil {
+		return err
+	}
 	return nil
 }
 
-func ensureApprovedFormula(api *client, name string) (formulaView, error) {
+func ensureApprovedFormula(team actors, name string) (formulaView, error) {
+	api := team.planner
 	createdResponse, err := api.call("POST", "/v1/formulas", createFormulaPayload(name), nil)
 	if err != nil {
 		return formulaView{}, err

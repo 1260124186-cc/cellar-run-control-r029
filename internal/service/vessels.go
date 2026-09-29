@@ -4,9 +4,13 @@ import (
 	"sort"
 
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/policyz"
 )
 
-func (s *Service) CreateVessel(input CreateVesselInput) (domain.Vessel, error) {
+func (s *Service) CreateVessel(operatorID string, input CreateVesselInput) (domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermVesselManage, "POST /v1/vessels"); err != nil {
+		return domain.Vessel{}, err
+	}
 	now := s.clock.Now()
 	vessel := domain.Vessel{
 		Code:      domain.NormalizeVesselCode(input.Code),
@@ -40,7 +44,10 @@ func (s *Service) CreateVessel(input CreateVesselInput) (domain.Vessel, error) {
 	return vessel, nil
 }
 
-func (s *Service) GetVessel(id string) (domain.Vessel, error) {
+func (s *Service) GetVessel(operatorID, id string) (domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermVesselRead, "GET /v1/vessels/{id}"); err != nil {
+		return domain.Vessel{}, err
+	}
 	var found domain.Vessel
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
@@ -56,7 +63,10 @@ func (s *Service) GetVessel(id string) (domain.Vessel, error) {
 	return found, nil
 }
 
-func (s *Service) ListVessels() ([]domain.Vessel, error) {
+func (s *Service) ListVessels(operatorID string) ([]domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermVesselRead, "GET /v1/vessels"); err != nil {
+		return nil, err
+	}
 	var vessels []domain.Vessel
 	err := s.store.View(func(snapshot domain.Snapshot) error {
 		vessels = make([]domain.Vessel, 0, len(snapshot.Vessels))
@@ -78,9 +88,13 @@ func (s *Service) ListVessels() ([]domain.Vessel, error) {
 }
 
 func (s *Service) FinishCleaning(
+	operatorID string,
 	id string,
 	input FinishCleaningInput,
 ) (domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermVesselManage, "POST /v1/vessels/{id}/finish-cleaning"); err != nil {
+		return domain.Vessel{}, err
+	}
 	var updated domain.Vessel
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
@@ -116,7 +130,10 @@ func (s *Service) FinishCleaning(
 	return updated, nil
 }
 
-func (s *Service) RetireVessel(id string, input VersionInput) (domain.Vessel, error) {
+func (s *Service) RetireVessel(operatorID, id string, input VersionInput) (domain.Vessel, error) {
+	if err := s.Authorize(operatorID, policyz.PermVesselManage, "POST /v1/vessels/{id}/retire"); err != nil {
+		return domain.Vessel{}, err
+	}
 	var updated domain.Vessel
 	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]

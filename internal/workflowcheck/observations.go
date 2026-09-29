@@ -7,20 +7,21 @@ import (
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 )
 
-func observationsCompletion(api *client) error {
-	formula, err := ensureApprovedFormula(api, "Completion Formula")
+func observationsCompletion(team actors) error {
+	formula, err := ensureApprovedFormula(team, "Completion Formula")
 	if err != nil {
 		return err
 	}
-	vessel, err := createCheckVessel(api, "VSL-202", 300)
+	vessel, err := createCheckVessel(team.operator, "VSL-202", 300)
 	if err != nil {
 		return err
 	}
-	started, err := createStartedRun(api, formula.ID, vessel.ID, "RUN-OBSERVATIONS")
+	started, err := createStartedRun(team, formula.ID, vessel.ID, "RUN-OBSERVATIONS")
 	if err != nil {
 		return err
 	}
 
+	api := team.observer
 	base := time.Now().UTC().Add(10 * time.Second)
 	points := []struct {
 		gravity     float64
@@ -52,6 +53,26 @@ func observationsCompletion(api *client) error {
 			return err
 		}
 		version = run.Version
+	}
+
+	// An operator drives vessels and runs but cannot record measurements:
+	// this over-privileged observation attempt is denied at authorization
+	// before domain validation, and leaves no observation behind.
+	operatorMeasurement, err := team.operator.call("POST",
+		"/v1/runs/"+started.Run.ID+"/observations",
+		map[string]any{
+			"sequence":      3,
+			"gravity":       1.014,
+			"temperature_c": 19.8,
+			"observed_at":   verifiedAt(base, 3),
+			"note":          "operator attempt",
+		}, ptrInt64(version))
+	if err != nil {
+		return err
+	}
+	if err := requireCode(operatorMeasurement, 403, string(domain.CodeForbidden),
+		"operator appends observation"); err != nil {
+		return err
 	}
 
 	invalidRange, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/observations",
@@ -127,6 +148,17 @@ func observationsCompletion(api *client) error {
 		return errInvalidWorkflow("completion metrics were not calculated")
 	}
 
+	// A planner cannot complete runs.
+	plannerComplete, err := team.planner.call("POST", "/v1/runs/"+started.Run.ID+"/complete",
+		nil, ptrInt64(completed.Run.Version))
+	if err != nil {
+		return err
+	}
+	if err := requireCode(plannerComplete, 403, string(domain.CodeForbidden),
+		"planner completes run"); err != nil {
+		return err
+	}
+
 	repeatResponse, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/complete",
 		nil, ptrInt64(completed.Run.Version))
 	if err != nil {
@@ -173,11 +205,12 @@ func createCheckVessel(api *client, code string, capacity float64) (vesselView, 
 }
 
 func createStartedRun(
-	api *client,
+	team actors,
 	formulaID string,
 	vesselID string,
 	code string,
 ) (pairView, error) {
+	api := team.operator
 	runResponse, err := api.call("POST", "/v1/runs",
 		createRunPayload(code, formulaID), nil)
 	if err != nil {

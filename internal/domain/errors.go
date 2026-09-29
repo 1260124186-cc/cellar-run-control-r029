@@ -23,6 +23,15 @@ const (
 	CodeObservationConflict Code = "observation_conflict"
 	CodeRevisionConflict    Code = "revision_conflict"
 	CodeStorage             Code = "storage_error"
+
+	// Authorization surface.
+	CodeUnauthenticated     Code = "unauthenticated"
+	CodeForbidden           Code = "forbidden"
+	CodeUnknownRole         Code = "unknown_role"
+	CodeRoleConflict        Code = "role_conflict"
+	CodeRoleAlreadyAssigned Code = "role_already_assigned"
+	CodeRoleNotAssigned     Code = "role_not_assigned"
+	CodeOperatorNotFound    Code = "operator_not_found"
 )
 
 type Error struct {

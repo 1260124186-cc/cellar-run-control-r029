@@ -61,7 +61,14 @@ func serve() error {
 	if err != nil {
 		return err
 	}
-	app := service.New(store, clock.System{})
+	authz, err := storage.OpenAuthorization(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	app, err := service.New(store, authz, clock.System{})
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
 		Addr:              cfg.Address,
 		Handler:           httpapi.NewHandler(app),

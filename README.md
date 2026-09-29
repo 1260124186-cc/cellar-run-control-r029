@@ -36,7 +36,8 @@ The default address is `127.0.0.1:8088`. The default snapshot directory is
 Environment variables:
 
 - `CELLAR_CONTROL_ADDR`: HTTP listen address.
-- `CELLAR_CONTROL_DATA_DIR`: directory containing `state.json`.
+- `CELLAR_CONTROL_DATA_DIR`: directory containing `state.json` and
+  `authorization.json`.
 
 Example:
 
@@ -54,6 +55,7 @@ internal/clock                 time boundary
 internal/config                environment configuration
 internal/domain                entities, validation, transitions, metrics
 internal/httpapi               HTTP routes, JSON decoding, errors
+internal/policyz               roles, permissions, conflict rules, decisions
 internal/service               use-case orchestration
 internal/storage               revisioned snapshot persistence
 internal/workflowcheck         real HTTP production checks
@@ -107,6 +109,54 @@ shape:
 }
 ```
 
+## Role-Based Authorization
+
+Every business request identifies its operator with the `X-Operator-ID`
+header. The service derives the caller's permissions from the roles assigned
+to that identity. A missing or blank identity fails closed with
+`unauthenticated`; an operator without an assignment, with an unknown role, or
+with conflicting roles fails closed with `forbidden`, `unknown_role`, or
+`role_conflict` respectively. Authorization runs before any business
+validation or write, so a rejected request never changes business state.
+
+Roles and the operational surfaces they unlock:
+
+- `planner` — planning: create formulas, set steps, approve and retire them.
+- `operator` — containers: register vessels, plan runs, reserve, start, and
+  abort them.
+- `observer` — observations and completion: append gravity observations and
+  move runs through conditioning and completion.
+- `admin` — all operational surfaces plus role administration.
+
+Operational roles are mutually exclusive: a grant that would create a
+separation-of-duties conflict is rejected stably and leaves the existing
+assignment intact. If a conflicting assignment is ever present in durable
+state, every later decision for that operator fails closed.
+
+Role assignments and the append-only audit trail are stored in
+`authorization.json`, independent of business state. A grant or revocation is
+durable before the next request is served and survives restart; the revocation
+fact itself is also retained in the audit trail. Role changes have no cache,
+so they take effect on the next request.
+
+A fresh data directory seeds the bootstrap administrator `cellar-admin`.
+Administration and policy endpoints:
+
+- `GET /v1/policy/roles` — the role-to-permission table (no identity needed).
+- `GET /v1/operators` — current assignments (requires `role.read`).
+- `GET /v1/operators/{id}` — one operator's roles.
+- `PUT /v1/operators/{id}/roles/{role}` — grant a role (requires
+  `role.assign`).
+- `POST /v1/operators/{id}/roles` — grant a role from a JSON body
+  (`{"role": "observer"}`).
+- `DELETE /v1/operators/{id}/roles/{role}` — revoke a role.
+- `GET /v1/authorization/audit?limit=N` — most recent audit facts, newest
+  first (requires `role.read`).
+
+Authorization error codes: `unauthenticated` (401), `forbidden`,
+`unknown_role`, `role_conflict` (403), `role_already_assigned`,
+`role_not_assigned` (409), and `operator_not_found` (404).
+
 ## Workflow Checks
 
 Run each production workflow check separately:
@@ -128,6 +178,10 @@ The service stores a complete revisioned snapshot at
 directory, commits the encoded bytes durably, closes the handle, and renames
 the result over the previous snapshot. The in-memory snapshot is replaced only
 after that operation succeeds.
+
+Role assignments and the authorization audit trail are stored independently at
+`<data-directory>/authorization.json` using the same atomic commit, so
+configuration and revocation facts cannot be lost by a crash or restart.
 
 On startup, an existing snapshot is decoded and normalized. Unknown or
 conflicting map indexes are not silently invented; invalid JSON or a negative
