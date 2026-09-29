@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 )
 
@@ -78,10 +80,65 @@ func normalizeSnapshot(value domain.Snapshot) (domain.Snapshot, error) {
 	if value.RunIndex == nil {
 		value.RunIndex = map[string]string{}
 	}
+	if value.Authorization.Operators == nil {
+		value.Authorization.Operators = map[string]domain.OperatorRecord{}
+	}
+	if value.Authorization.Audit == nil {
+		value.Authorization.Audit = []domain.AuditEvent{}
+	}
+	if value.Authorization.NextAuditSeq < 1 {
+		return domain.Snapshot{}, fmt.Errorf("authorization audit sequence cannot be below one")
+	}
 	if err := validateIndexes(value); err != nil {
 		return domain.Snapshot{}, err
 	}
+	if err := validateAuthorization(value.Authorization); err != nil {
+		return domain.Snapshot{}, err
+	}
 	return value, nil
+}
+
+// validateAuthorization guarantees a restarted process never serves with an
+// unreadable role assignment: unknown roles, conflicting operational roles, or
+// a mismatched audit sequence stop startup instead of being silently repaired.
+func validateAuthorization(state domain.AuthorizationState) error {
+	ids := make([]string, 0, len(state.Operators))
+	for id := range state.Operators {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		operator := state.Operators[id]
+		if operator.ID != id {
+			return fmt.Errorf("operator %s index does not match its record", id)
+		}
+		if err := domain.ValidateOperatorID(id, "operator id"); err != nil {
+			return fmt.Errorf("operator record has an invalid identity: %w", err)
+		}
+		if operator.Version < 1 {
+			return fmt.Errorf("operator %s has an invalid version", id)
+		}
+		roles, err := authz.NormalizeRoles(operator.Roles)
+		if err != nil {
+			return fmt.Errorf("operator %s has an invalid role set: %w", id, err)
+		}
+		if a, b, conflict := authz.Conflict(roles); conflict {
+			return fmt.Errorf("operator %s holds conflicting roles %s and %s", id, a, b)
+		}
+	}
+	expectedSeq := int64(0)
+	for index, event := range state.Audit {
+		if index == 0 {
+			expectedSeq = event.Sequence
+		} else if event.Sequence != expectedSeq {
+			return fmt.Errorf("audit history has a non-contiguous sequence")
+		}
+		expectedSeq = event.Sequence + 1
+	}
+	if len(state.Audit) > 0 && state.NextAuditSeq != expectedSeq {
+		return fmt.Errorf("audit sequence does not match its history")
+	}
+	return nil
 }
 
 func validateIndexes(value domain.Snapshot) error {

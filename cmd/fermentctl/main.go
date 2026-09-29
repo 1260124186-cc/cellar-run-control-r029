@@ -62,6 +62,9 @@ func serve() error {
 		return err
 	}
 	app := service.New(store, clock.System{})
+	if err := app.SeedBootstrapAdmin(cfg.BootstrapAdmin); err != nil {
+		return err
+	}
 	server := &http.Server{
 		Addr:              cfg.Address,
 		Handler:           httpapi.NewHandler(app),

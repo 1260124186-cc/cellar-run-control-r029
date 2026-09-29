@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/service"
 )
@@ -23,11 +24,15 @@ type setStepsRequest struct {
 
 func registerFormulaRoutes(mux *http.ServeMux, app *service.Service) {
 	mux.HandleFunc("POST /v1/formulas", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermFormulaPlan)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[createFormulaRequest](response, request)
 		if !handleDecode(response, err) {
 			return
 		}
-		formula, err := app.CreateFormula(service.CreateFormulaInput{
+		formula, err := app.CreateFormula(actor, service.CreateFormulaInput{
 			Name:                  body.Name,
 			Style:                 body.Style,
 			TargetOriginalGravity: body.TargetOriginalGravity,
@@ -62,6 +67,10 @@ func registerFormulaRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("PUT /v1/formulas/{id}/steps", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermFormulaPlan)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[setStepsRequest](response, request)
 		if !handleDecode(response, err) {
 			return
@@ -70,7 +79,7 @@ func registerFormulaRoutes(mux *http.ServeMux, app *service.Service) {
 		if !handleDecode(response, err) {
 			return
 		}
-		formula, err := app.SetFormulaSteps(request.PathValue("id"),
+		formula, err := app.SetFormulaSteps(actor, request.PathValue("id"),
 			service.SetFormulaStepsInput{ExpectedVersion: expected, Steps: body.Steps})
 		if err != nil {
 			writeDomainError(response, err)
@@ -80,11 +89,15 @@ func registerFormulaRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/formulas/{id}/approve", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermFormulaPlan)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		formula, err := app.ApproveFormula(request.PathValue("id"),
+		formula, err := app.ApproveFormula(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -94,11 +107,15 @@ func registerFormulaRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/formulas/{id}/retire", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermFormulaPlan)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		formula, err := app.RetireFormula(request.PathValue("id"),
+		formula, err := app.RetireFormula(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)

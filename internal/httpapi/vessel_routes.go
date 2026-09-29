@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/service"
 )
 
@@ -13,11 +14,15 @@ type createVesselRequest struct {
 
 func registerVesselRoutes(mux *http.ServeMux, app *service.Service) {
 	mux.HandleFunc("POST /v1/vessels", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[createVesselRequest](response, request)
 		if !handleDecode(response, err) {
 			return
 		}
-		vessel, err := app.CreateVessel(service.CreateVesselInput{
+		vessel, err := app.CreateVessel(actor, service.CreateVesselInput{
 			Code:      body.Code,
 			CapacityL: body.CapacityL,
 		})
@@ -47,11 +52,15 @@ func registerVesselRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/vessels/{id}/finish-cleaning", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		vessel, err := app.FinishCleaning(request.PathValue("id"),
+		vessel, err := app.FinishCleaning(actor, request.PathValue("id"),
 			service.FinishCleaningInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -61,11 +70,15 @@ func registerVesselRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/vessels/{id}/retire", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		vessel, err := app.RetireVessel(request.PathValue("id"),
+		vessel, err := app.RetireVessel(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)

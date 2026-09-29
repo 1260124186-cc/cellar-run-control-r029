@@ -3,10 +3,11 @@ package service
 import (
 	"sort"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 )
 
-func (s *Service) CreateRun(input CreateRunInput) (domain.FermentationRun, error) {
+func (s *Service) CreateRun(actor Actor, input CreateRunInput) (domain.FermentationRun, error) {
 	now := s.clock.Now()
 	code := domain.NormalizeRunCode(input.Code)
 	if code == "" {
@@ -36,7 +37,7 @@ func (s *Service) CreateRun(input CreateRunInput) (domain.FermentationRun, error
 	}
 	run.ID = id
 
-	err = s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err = s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[run.FormulaID]
 		if !ok {
 			return domain.NewError(domain.CodeFormulaNotFound, "formula was not found")
@@ -60,12 +61,13 @@ func (s *Service) CreateRun(input CreateRunInput) (domain.FermentationRun, error
 }
 
 func (s *Service) ReserveRun(
+	actor Actor,
 	id string,
 	input ReserveRunInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
 		if !ok {
 			return domain.NewError(domain.CodeRunNotFound, "run was not found")
@@ -100,12 +102,13 @@ func (s *Service) ReserveRun(
 }
 
 func (s *Service) StartRun(
+	actor Actor,
 	id string,
 	input VersionInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
 		if !ok {
 			return domain.NewError(domain.CodeRunNotFound, "run was not found")
@@ -139,12 +142,13 @@ func (s *Service) StartRun(
 }
 
 func (s *Service) AbortRun(
+	actor Actor,
 	id string,
 	input VersionInput,
 ) (domain.FermentationRun, domain.Vessel, error) {
 	var updatedRun domain.FermentationRun
 	var updatedVessel domain.Vessel
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		run, ok := snapshot.Runs[id]
 		if !ok {
 			return domain.NewError(domain.CodeRunNotFound, "run was not found")

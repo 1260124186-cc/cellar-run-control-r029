@@ -37,6 +37,9 @@ Environment variables:
 
 - `CELLAR_CONTROL_ADDR`: HTTP listen address.
 - `CELLAR_CONTROL_DATA_DIR`: directory containing `state.json`.
+- `CELLAR_CONTROL_BOOTSTRAP_ADMIN`: identity seeded with the `admin` role on a
+  fresh data directory (default `cellar-admin`). It is provisioned once and a
+  later revocation is never revived on restart.
 
 Example:
 
@@ -50,11 +53,12 @@ go run ./cmd/fermentctl serve
 
 ```text
 cmd/fermentctl                 service and workflow-check executable
+internal/authz                 role and permission catalog, pure decisions
 internal/clock                 time boundary
 internal/config                environment configuration
 internal/domain                entities, validation, transitions, metrics
 internal/httpapi               HTTP routes, JSON decoding, errors
-internal/service               use-case orchestration
+internal/service               use-case orchestration and authorization
 internal/storage               revisioned snapshot persistence
 internal/workflowcheck         real HTTP production checks
 ```
@@ -94,6 +98,33 @@ Run workflow:
 - `POST /v1/runs/{id}/complete`
 - `POST /v1/runs/{id}/abort`
 
+Operator management (admin role):
+
+- `GET /v1/operators`
+- `PUT /v1/operators/{id}/roles`
+- `POST /v1/operators/{id}/revoke`
+- `GET /v1/audit`
+
+Writes and management routes require an `X-Operator-ID` header naming a
+registered operator. Roles are never read from the request; they are resolved
+from the durable snapshot on every request, so a grant or revocation takes
+effect on the next request. The roles are:
+
+- `planner` grants `formula:plan` (formula planning and approval).
+- `operator` grants `vessel:operate` (vessels and run reservation, start,
+  abort, and cleaning).
+- `observer` grants `observation:write` and `run:complete` (observations,
+  conditioning, and completion).
+- `admin` grants `admin:manage` (role assignment, revocation, and audit).
+
+The three operational roles are mutually exclusive within one operator.
+Business reads stay open to the integration client and do not require a role.
+
+Authorization failures use stable codes: `identity_required` (401), and
+`unknown_operator`, `unknown_role`, `role_conflict`, or `permission_denied`
+(403). A rejected request performs no business write; every denial, grant,
+revocation, and bootstrap provisioning is appended to the audit log.
+
 Writes accept an optional `X-Expected-Version` header. Errors use a stable
 shape:
 
@@ -115,6 +146,7 @@ Run each production workflow check separately:
 go run ./cmd/fermentctl check formula-approval
 go run ./cmd/fermentctl check vessel-run-lifecycle
 go run ./cmd/fermentctl check observations-completion
+go run ./cmd/fermentctl check role-access-control
 ```
 
 Each check creates a temporary snapshot directory, starts the real HTTP
@@ -130,8 +162,11 @@ the result over the previous snapshot. The in-memory snapshot is replaced only
 after that operation succeeds.
 
 On startup, an existing snapshot is decoded and normalized. Unknown or
-conflicting map indexes are not silently invented; invalid JSON or a negative
-revision stops the process before HTTP serving begins.
+conflicting map indexes are not silently invented; invalid JSON, a negative
+revision, an unknown or conflicting assigned role, or a non-contiguous audit
+sequence stops the process before HTTP serving begins. Operator roles, the
+append-only audit history, and revocation facts are part of the snapshot and
+survive restarts.
 
 ## Repair-Ready Boundaries
 

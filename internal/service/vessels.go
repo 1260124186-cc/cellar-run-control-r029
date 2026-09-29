@@ -3,10 +3,11 @@ package service
 import (
 	"sort"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 )
 
-func (s *Service) CreateVessel(input CreateVesselInput) (domain.Vessel, error) {
+func (s *Service) CreateVessel(actor Actor, input CreateVesselInput) (domain.Vessel, error) {
 	now := s.clock.Now()
 	vessel := domain.Vessel{
 		Code:      domain.NormalizeVesselCode(input.Code),
@@ -25,7 +26,7 @@ func (s *Service) CreateVessel(input CreateVesselInput) (domain.Vessel, error) {
 	}
 	vessel.ID = id
 
-	err = s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err = s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		if _, exists := snapshot.VesselIndex[vessel.Code]; exists {
 			return domain.NewError(domain.CodeVesselConflict,
 				"a vessel with the same code already exists")
@@ -78,11 +79,12 @@ func (s *Service) ListVessels() ([]domain.Vessel, error) {
 }
 
 func (s *Service) FinishCleaning(
+	actor Actor,
 	id string,
 	input FinishCleaningInput,
 ) (domain.Vessel, error) {
 	var updated domain.Vessel
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
@@ -116,9 +118,9 @@ func (s *Service) FinishCleaning(
 	return updated, nil
 }
 
-func (s *Service) RetireVessel(id string, input VersionInput) (domain.Vessel, error) {
+func (s *Service) RetireVessel(actor Actor, id string, input VersionInput) (domain.Vessel, error) {
 	var updated domain.Vessel
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermVesselOperate, func(snapshot *domain.Snapshot) error {
 		vessel, ok := snapshot.Vessels[id]
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")

@@ -33,7 +33,7 @@ func observationsCompletion(api *client) error {
 	version := started.Run.Version
 	for index, point := range points {
 		sequence := index + 1
-		response, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/observations",
+		response, err := api.as("observer").call("POST", "/v1/runs/"+started.Run.ID+"/observations",
 			map[string]any{
 				"sequence":      sequence,
 				"gravity":       point.gravity,
@@ -54,7 +54,7 @@ func observationsCompletion(api *client) error {
 		version = run.Version
 	}
 
-	invalidRange, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/observations",
+	invalidRange, err := api.as("observer").call("POST", "/v1/runs/"+started.Run.ID+"/observations",
 		map[string]any{
 			"sequence":      4,
 			"gravity":       1.4,
@@ -70,7 +70,7 @@ func observationsCompletion(api *client) error {
 		return err
 	}
 
-	nonMonotonic, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/observations",
+	nonMonotonic, err := api.as("observer").call("POST", "/v1/runs/"+started.Run.ID+"/observations",
 		map[string]any{
 			"sequence":      4,
 			"gravity":       1.012,
@@ -86,7 +86,7 @@ func observationsCompletion(api *client) error {
 		return err
 	}
 
-	conditioningResponse, err := api.call("POST",
+	conditioningResponse, err := api.as("observer").call("POST",
 		"/v1/runs/"+started.Run.ID+"/conditioning", nil, ptrInt64(version))
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func observationsCompletion(api *client) error {
 		return err
 	}
 
-	completeResponse, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/complete",
+	completeResponse, err := api.as("observer").call("POST", "/v1/runs/"+started.Run.ID+"/complete",
 		nil, ptrInt64(conditioning.Version))
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func observationsCompletion(api *client) error {
 		return errInvalidWorkflow("completion metrics were not calculated")
 	}
 
-	repeatResponse, err := api.call("POST", "/v1/runs/"+started.Run.ID+"/complete",
+	repeatResponse, err := api.as("observer").call("POST", "/v1/runs/"+started.Run.ID+"/complete",
 		nil, ptrInt64(completed.Run.Version))
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func observationsCompletion(api *client) error {
 		return err
 	}
 
-	readResponse, err := api.call("GET", "/v1/runs/"+started.Run.ID, nil, nil)
+	readResponse, err := api.as("observer").call("GET", "/v1/runs/"+started.Run.ID, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func observationsCompletion(api *client) error {
 }
 
 func createCheckVessel(api *client, code string, capacity float64) (vesselView, error) {
-	response, err := api.call("POST", "/v1/vessels", map[string]any{
+	response, err := api.as("operator").call("POST", "/v1/vessels", map[string]any{
 		"code":            code,
 		"capacity_liters": capacity,
 	}, nil)
@@ -178,7 +178,7 @@ func createStartedRun(
 	vesselID string,
 	code string,
 ) (pairView, error) {
-	runResponse, err := api.call("POST", "/v1/runs",
+	runResponse, err := api.as("operator").call("POST", "/v1/runs",
 		createRunPayload(code, formulaID), nil)
 	if err != nil {
 		return pairView{}, err
@@ -190,7 +190,7 @@ func createStartedRun(
 	if err := runResponse.decode(&run); err != nil {
 		return pairView{}, err
 	}
-	reserveResponse, err := api.call("POST", "/v1/runs/"+run.ID+"/reserve",
+	reserveResponse, err := api.as("operator").call("POST", "/v1/runs/"+run.ID+"/reserve",
 		map[string]any{"vessel_id": vesselID}, ptrInt64(run.Version))
 	if err != nil {
 		return pairView{}, err
@@ -202,7 +202,7 @@ func createStartedRun(
 	if err := reserveResponse.decode(&reserved); err != nil {
 		return pairView{}, err
 	}
-	startResponse, err := api.call("POST", "/v1/runs/"+run.ID+"/start",
+	startResponse, err := api.as("operator").call("POST", "/v1/runs/"+run.ID+"/start",
 		nil, ptrInt64(reserved.Run.Version))
 	if err != nil {
 		return pairView{}, err

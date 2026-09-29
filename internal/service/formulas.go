@@ -4,10 +4,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 )
 
-func (s *Service) CreateFormula(input CreateFormulaInput) (domain.Formula, error) {
+func (s *Service) CreateFormula(actor Actor, input CreateFormulaInput) (domain.Formula, error) {
 	now := s.clock.Now()
 	formula := domain.Formula{
 		Name:                  input.Name,
@@ -34,7 +35,7 @@ func (s *Service) CreateFormula(input CreateFormulaInput) (domain.Formula, error
 	formula.ID = id
 	nameKey := domain.NameKey(formula.Name)
 
-	err = s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err = s.authorizedUpdate(actor, authz.PermFormulaPlan, func(snapshot *domain.Snapshot) error {
 		if _, exists := snapshot.NameIndex[nameKey]; exists {
 			return domain.NewError(domain.CodeFormulaNameConflict,
 				"a formula with the same normalized name already exists")
@@ -50,11 +51,12 @@ func (s *Service) CreateFormula(input CreateFormulaInput) (domain.Formula, error
 }
 
 func (s *Service) SetFormulaSteps(
+	actor Actor,
 	id string,
 	input SetFormulaStepsInput,
 ) (domain.Formula, error) {
 	var updated domain.Formula
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermFormulaPlan, func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
 		if !ok {
 			return domain.NewError(domain.CodeFormulaNotFound, "formula was not found")
@@ -76,9 +78,9 @@ func (s *Service) SetFormulaSteps(
 	return updated, nil
 }
 
-func (s *Service) ApproveFormula(id string, input VersionInput) (domain.Formula, error) {
+func (s *Service) ApproveFormula(actor Actor, id string, input VersionInput) (domain.Formula, error) {
 	var updated domain.Formula
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermFormulaPlan, func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
 		if !ok {
 			return domain.NewError(domain.CodeFormulaNotFound, "formula was not found")
@@ -99,9 +101,9 @@ func (s *Service) ApproveFormula(id string, input VersionInput) (domain.Formula,
 	return updated, nil
 }
 
-func (s *Service) RetireFormula(id string, input VersionInput) (domain.Formula, error) {
+func (s *Service) RetireFormula(actor Actor, id string, input VersionInput) (domain.Formula, error) {
 	var updated domain.Formula
-	err := s.store.Execute(func(snapshot *domain.Snapshot) error {
+	err := s.authorizedUpdate(actor, authz.PermFormulaPlan, func(snapshot *domain.Snapshot) error {
 		formula, ok := snapshot.Formulas[id]
 		if !ok {
 			return domain.NewError(domain.CodeFormulaNotFound, "formula was not found")

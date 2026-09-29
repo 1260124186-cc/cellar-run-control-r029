@@ -7,7 +7,7 @@ func vesselRunLifecycle(api *client) error {
 	if err != nil {
 		return err
 	}
-	vesselResponse, err := api.call("POST", "/v1/vessels", map[string]any{
+	vesselResponse, err := api.as("operator").call("POST", "/v1/vessels", map[string]any{
 		"code":            "VSL-101",
 		"capacity_liters": 240.0,
 	}, nil)
@@ -22,7 +22,7 @@ func vesselRunLifecycle(api *client) error {
 		return err
 	}
 
-	firstResponse, err := api.call("POST", "/v1/runs",
+	firstResponse, err := api.as("operator").call("POST", "/v1/runs",
 		createRunPayload("RUN-LIFECYCLE-A", formula.ID), nil)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func vesselRunLifecycle(api *client) error {
 		return err
 	}
 
-	secondResponse, err := api.call("POST", "/v1/runs",
+	secondResponse, err := api.as("operator").call("POST", "/v1/runs",
 		createRunPayload("RUN-LIFECYCLE-B", formula.ID), nil)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func vesselRunLifecycle(api *client) error {
 		return err
 	}
 
-	reservedResponse, err := api.call("POST", "/v1/runs/"+first.ID+"/reserve",
+	reservedResponse, err := api.as("operator").call("POST", "/v1/runs/"+first.ID+"/reserve",
 		map[string]any{"vessel_id": vessel.ID}, ptrInt64(1))
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func vesselRunLifecycle(api *client) error {
 		return err
 	}
 
-	conflictResponse, err := api.call("POST", "/v1/runs/"+second.ID+"/reserve",
+	conflictResponse, err := api.as("operator").call("POST", "/v1/runs/"+second.ID+"/reserve",
 		map[string]any{"vessel_id": vessel.ID}, ptrInt64(1))
 	if err != nil {
 		return err
@@ -77,7 +77,7 @@ func vesselRunLifecycle(api *client) error {
 		return err
 	}
 
-	startResponse, err := api.call("POST", "/v1/runs/"+first.ID+"/start",
+	startResponse, err := api.as("operator").call("POST", "/v1/runs/"+first.ID+"/start",
 		nil, ptrInt64(2))
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func vesselRunLifecycle(api *client) error {
 		return errInvalidWorkflow("run did not retain its reserved vessel")
 	}
 
-	readResponse, err := api.call("GET", "/v1/runs/"+first.ID, nil, nil)
+	readResponse, err := api.as("operator").call("GET", "/v1/runs/"+first.ID, nil, nil)
 	if err != nil {
 		return err
 	}

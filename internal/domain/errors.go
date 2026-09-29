@@ -23,6 +23,12 @@ const (
 	CodeObservationConflict Code = "observation_conflict"
 	CodeRevisionConflict    Code = "revision_conflict"
 	CodeStorage             Code = "storage_error"
+	CodeIdentityRequired    Code = "identity_required"
+	CodeUnknownOperator     Code = "unknown_operator"
+	CodeUnknownRole         Code = "unknown_role"
+	CodeRoleConflict        Code = "role_conflict"
+	CodePermissionDenied    Code = "permission_denied"
+	CodeOperatorNotFound    Code = "operator_not_found"
 )
 
 type Error struct {

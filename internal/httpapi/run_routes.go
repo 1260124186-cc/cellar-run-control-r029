@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/authz"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/service"
 )
 
@@ -28,11 +29,15 @@ type observationRequest struct {
 
 func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	mux.HandleFunc("POST /v1/runs", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[createRunRequest](response, request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, err := app.CreateRun(service.CreateRunInput{
+		run, err := app.CreateRun(actor, service.CreateRunInput{
 			Code:           body.Code,
 			FormulaID:      body.FormulaID,
 			PlannedVolumeL: body.PlannedVolumeL,
@@ -64,6 +69,10 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/reserve", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[reserveRunRequest](response, request)
 		if !handleDecode(response, err) {
 			return
@@ -72,7 +81,7 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.ReserveRun(request.PathValue("id"), service.ReserveRunInput{
+		run, vessel, err := app.ReserveRun(actor, request.PathValue("id"), service.ReserveRunInput{
 			ExpectedVersion: expected,
 			VesselID:        body.VesselID,
 		})
@@ -84,11 +93,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/start", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.StartRun(request.PathValue("id"),
+		run, vessel, err := app.StartRun(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -98,11 +111,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/observations", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermObserve)
+		if !ok {
+			return
+		}
 		body, err := decodeJSON[observationRequest](response, request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, err := app.AppendObservation(request.PathValue("id"), service.ObservationInput{
+		run, err := app.AppendObservation(actor, request.PathValue("id"), service.ObservationInput{
 			Sequence:     body.Sequence,
 			Gravity:      body.Gravity,
 			TemperatureC: body.TemperatureC,
@@ -117,11 +134,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/conditioning", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermComplete)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, err := app.BeginConditioning(request.PathValue("id"),
+		run, err := app.BeginConditioning(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -131,11 +152,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/complete", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermComplete)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.CompleteRun(request.PathValue("id"),
+		run, vessel, err := app.CompleteRun(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
@@ -145,11 +170,15 @@ func registerRunRoutes(mux *http.ServeMux, app *service.Service) {
 	})
 
 	mux.HandleFunc("POST /v1/runs/{id}/abort", func(response http.ResponseWriter, request *http.Request) {
+		actor, ok := requireActor(response, request, app, authz.PermVesselOperate)
+		if !ok {
+			return
+		}
 		expected, err := expectedVersion(request)
 		if !handleDecode(response, err) {
 			return
 		}
-		run, vessel, err := app.AbortRun(request.PathValue("id"),
+		run, vessel, err := app.AbortRun(actor, request.PathValue("id"),
 			service.VersionInput{ExpectedVersion: expected})
 		if err != nil {
 			writeDomainError(response, err)
